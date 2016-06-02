@@ -18,7 +18,7 @@ import com.google.vr.sdk.audio.GvrAudioEngine;
 public class MainActivity extends AppCompatActivity implements SensorEventListener {
 
     GvrAudioEngine gvrAudioEngine;
-    private static final String SOUND_FILE = "vr_first.wav";
+    private static final String SOUND_FILE = "vr_birds.wav";
     private volatile int soundId = GvrAudioEngine.INVALID_ID;
 
     private SensorManager mgr;
@@ -92,11 +92,11 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 float orientation[] = new float[3];
                 SensorManager.getOrientation(R, orientation);
 
-                updatePosition(orientation[0],orientation[1]);
+                updatePosition(orientation[0],orientation[2]);
 
                 gvrAudioEngine.setSoundObjectPosition(
                         soundId,
-                        10*orientation[0], 10*orientation[1], 10*orientation[2]);
+                        x, y, z);
             }
         }
     }
@@ -116,14 +116,16 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     }
 
     public void updatePosition(float azimuth,float elevation){
-        double azimuth_radian = (azimuth*Math.PI/180);
-        double elevation_radian = (elevation*Math.PI/180);
+        double azimuth_radian = Math.PI + (azimuth);
+        double elevation_radian = Math.PI + (elevation);
 
         float r = 10;
 
-        x = -(float)(r * Math.sin(elevation_radian) * Math.cos(azimuth_radian));
-        y = -(float)(r * Math.sin(elevation_radian) * Math.sin(azimuth_radian));
-        z = -(float)(r * Math.cos(elevation_radian));
+        x = (float)(r * Math.sin(elevation_radian) * Math.cos(azimuth_radian));
+        y = (float)(r * Math.sin(elevation_radian) * Math.sin(azimuth_radian));
+        z = (float)(r * Math.cos(elevation_radian));
+
+        Log.v("xyz",String.valueOf(azimuth)+String.valueOf(elevation));
     }
 
 }
