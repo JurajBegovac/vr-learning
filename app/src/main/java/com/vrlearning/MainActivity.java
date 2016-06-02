@@ -41,7 +41,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private GvrAudioEngine gvrAudioEngine;
     private GvrAudioEngine gvrAudioEngineMeditation;
 
-    private static final String SOUND_FILE            = "wind.wav";
+    private static final String SOUND_FILE            = "vr_birds.wav";
     private volatile     int    soundId               = GvrAudioEngine.INVALID_ID;
     private static final String SOUND_FILE_MEDITATION = "focus.wav";
 
@@ -65,7 +65,14 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
         // Add the restore state code here.
         if (savedInstanceState != null) {
-            long progressTime = savedInstz
+            long progressTime = savedInstanceState.getLong(STATE_PROGRESS_TIME);
+            videoWidgetView.seekTo(progressTime);
+
+            isPaused = savedInstanceState.getBoolean(STATE_IS_PAUSED);
+            if (isPaused) {
+                videoWidgetView.pauseVideo();
+            }
+        } else {
             try {
                 if (videoWidgetView.getDuration() <= 0) {
                     videoWidgetView.loadVideoFromAsset(mVideoName);
