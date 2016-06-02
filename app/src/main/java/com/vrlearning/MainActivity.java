@@ -5,7 +5,6 @@ import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.os.Bundle;
-import android.os.Handler;
 import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentStatePagerAdapter;
 import android.support.v4.view.PagerAdapter;
@@ -17,16 +16,18 @@ import com.google.vr.sdk.audio.GvrAudioEngine;
 
 public class MainActivity extends AppCompatActivity implements SensorEventListener {
 
-    GvrAudioEngine gvrAudioEngine;
-    private static final String SOUND_FILE = "vr_birds.wav";
-    private volatile int soundId = GvrAudioEngine.INVALID_ID;
+    private GvrAudioEngine gvrAudioEngine;
+    private GvrAudioEngine gvrAudioEngineMeditation;
+
+    private static final String SOUND_FILE            = "wind.wav";
+    private volatile     int    soundId               = GvrAudioEngine.INVALID_ID;
+    private static final String SOUND_FILE_MEDITATION = "focus.wav";
 
     private SensorManager mgr;
-    private Sensor gyro;
-    Sensor accelerometer;
-    Sensor magnetometer;
+    private Sensor        accelerometer;
+    private Sensor        magnetometer;
 
-    public float x=0,y=0,z=0;
+    public float x = 0, y = 0, z = 0;
     float[] mGravity;
     float[] mGeomagnetic;
 
@@ -35,12 +36,12 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        gvrAudioEngine = new GvrAudioEngine(this,GvrAudioEngine.RenderingMode.BINAURAL_HIGH_QUALITY);
+        gvrAudioEngine = new GvrAudioEngine(this, GvrAudioEngine.RenderingMode.BINAURAL_HIGH_QUALITY);
+        gvrAudioEngineMeditation = new GvrAudioEngine(this, GvrAudioEngine.RenderingMode.BINAURAL_HIGH_QUALITY);
+
         mgr = (SensorManager) this.getSystemService(SENSOR_SERVICE);
-        gyro = mgr.getDefaultSensor(Sensor.TYPE_GYROSCOPE);
         accelerometer = mgr.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
         magnetometer = mgr.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
-
 
         final ViewPager viewPager = (ViewPager) findViewById(R.id.pager);
         final PagerAdapter adapter = new FragmentStatePagerAdapter(getSupportFragmentManager()) {
@@ -62,20 +63,22 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         viewPager.setAdapter(adapter);
 
         gvrAudioEngine.update();
-
         gvrAudioEngine.preloadSoundFile(SOUND_FILE);
         soundId = gvrAudioEngine.createSoundObject(SOUND_FILE);
-        gvrAudioEngine.setHeadPosition(500*x,500*y,500*z);
-        gvrAudioEngine.setSoundObjectPosition(
-                soundId, 0, 0, 0);
-        gvrAudioEngine.setSoundVolume(soundId,50);
+        gvrAudioEngine.setHeadPosition(500 * x, 500 * y, 500 * z);
+        gvrAudioEngine.setSoundObjectPosition(soundId, 0, 0, 0);
+        gvrAudioEngine.setSoundVolume(soundId, 20);
         gvrAudioEngine.playSound(soundId, true);
 
+        gvrAudioEngineMeditation.update();
+        gvrAudioEngineMeditation.preloadSoundFile(SOUND_FILE_MEDITATION);
+        int soundMeditationId = gvrAudioEngineMeditation.createSoundObject(SOUND_FILE_MEDITATION);
+        gvrAudioEngineMeditation.setHeadPosition(500 * x, 500 * y, 500 * z);
+        gvrAudioEngineMeditation.setSoundObjectPosition(
+                soundMeditationId, 0, 0, 0);
+        gvrAudioEngineMeditation.setSoundVolume(soundMeditationId, 1);
+        gvrAudioEngineMeditation.playSound(soundMeditationId, true);
 
-       // updateModelPosition();
-
-
-        //checkGLError("onSurfaceCreated");
     }
 
     @Override
@@ -102,15 +105,21 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     }
 
     @Override
-    public void onAccuracyChanged(Sensor arg0, int arg1)
-    {
+    public void onAccuracyChanged(Sensor arg0, int arg1) {
         //Do nothing.
+    }
+    @Override
+    public void onPause() {
+        gvrAudioEngine.pause();
+        gvrAudioEngineMeditation.pause();
+        super.onPause();
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        mgr.registerListener(this, gyro, SensorManager.SENSOR_DELAY_FASTEST);
+        gvrAudioEngine.resume();
+        gvrAudioEngineMeditation.resume();
         mgr.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_NORMAL);
         mgr.registerListener(this, magnetometer, SensorManager.SENSOR_DELAY_NORMAL);
     }
@@ -125,7 +134,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         y = (float)(r * Math.sin(elevation_radian) * Math.sin(azimuth_radian));
         z = (float)(r * Math.cos(elevation_radian));
 
-        Log.v("xyz",String.valueOf(azimuth)+String.valueOf(elevation));
+        Log.v("xyz", String.valueOf(azimuth)+String.valueOf(elevation));
     }
 
 }
