@@ -1,6 +1,11 @@
 package com.vrlearning;
 
 
+import android.app.Activity;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
 import android.os.Bundle;
 import android.support.v4.app.Fragment;
 import android.util.Log;
@@ -12,6 +17,7 @@ import android.widget.SeekBar.OnSeekBarChangeListener;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.google.vr.sdk.audio.GvrAudioEngine;
 import com.google.vr.sdk.widgets.video.VrVideoEventListener;
 import com.google.vr.sdk.widgets.video.VrVideoView;
 
@@ -23,7 +29,7 @@ import java.util.Locale;
  * Use the {@link VRFragment#newInstance} factory method to
  * create an instance of this fragment.
  */
-public class VRFragment extends Fragment {
+public class VRFragment extends Fragment implements SensorEventListener {
     private static final String TAG            = "VRFragment";
     private static final String ARG_VIDEO_NAME = "video_name";
 
@@ -54,9 +60,25 @@ public class VRFragment extends Fragment {
      */
     private boolean isPaused = false;
 
+    private GvrAudioEngine gvrAudioEngine;
+    private GvrAudioEngine gvrAudioEngineMeditation;
+
+    private static final String SOUND_FILE            = "vr_birds.wav";
+    private volatile     int    soundId               = GvrAudioEngine.INVALID_ID;
+    private static final String SOUND_FILE_MEDITATION = "focus.wav";
+
+    private SensorManager mgr;
+    private Sensor        accelerometer;
+    private Sensor        magnetometer;
+
+    public float x = 0, y = 0, z = 0;
+    float[] mGravity;
+    float[] mGeomagnetic;
+
     public VRFragment() {
         // Required empty public constructor
     }
+
     public static VRFragment newInstance(String param1) {
         VRFragment fragment = new VRFragment();
         Bundle args = new Bundle();
@@ -64,12 +86,37 @@ public class VRFragment extends Fragment {
         fragment.setArguments(args);
         return fragment;
     }
+
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         if (getArguments() != null) {
             mVideoName = getArguments().getString(ARG_VIDEO_NAME);
         }
+
+        gvrAudioEngine = new GvrAudioEngine(getActivity(), GvrAudioEngine.RenderingMode.BINAURAL_HIGH_QUALITY);
+        gvrAudioEngineMeditation = new GvrAudioEngine(getActivity(), GvrAudioEngine.RenderingMode.BINAURAL_HIGH_QUALITY);
+
+        mgr = (SensorManager) getActivity().getSystemService(Activity.SENSOR_SERVICE);
+        accelerometer = mgr.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        magnetometer = mgr.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
+
+        gvrAudioEngine.update();
+        gvrAudioEngine.preloadSoundFile(SOUND_FILE);
+        soundId = gvrAudioEngine.createSoundObject(SOUND_FILE);
+        gvrAudioEngine.setHeadPosition(500 * x, 500 * y, 500 * z);
+        gvrAudioEngine.setSoundObjectPosition(soundId, 0, 0, 0);
+        gvrAudioEngine.setSoundVolume(soundId, 20);
+        gvrAudioEngine.playSound(soundId, true);
+
+        gvrAudioEngineMeditation.update();
+        gvrAudioEngineMeditation.preloadSoundFile(SOUND_FILE_MEDITATION);
+        int soundMeditationId = gvrAudioEngineMeditation.createSoundObject(SOUND_FILE_MEDITATION);
+        gvrAudioEngineMeditation.setHeadPosition(500 * x, 500 * y, 500 * z);
+        gvrAudioEngineMeditation.setSoundObjectPosition(
+                soundMeditationId, 0, 0, 0);
+        gvrAudioEngineMeditation.setSoundVolume(soundMeditationId, 1);
+        gvrAudioEngineMeditation.playSound(soundMeditationId, true);
     }
 
     @Override
@@ -185,12 +232,15 @@ public class VRFragment extends Fragment {
 
     @Override
     public void onPause() {
+        gvrAudioEngine.pause();
+        gvrAudioEngineMeditation.pause();
         super.onPause();
         // Prevent the view from rendering continuously when in the background.
         videoWidgetView.pauseRendering();
         // If the video was playing when onPause() is called, the default behavior will be to pause
         // the video and keep it paused when onResume() is called.
         isPaused = true;
+        mgr.unregisterListener(this);
     }
 
     @Override
@@ -200,6 +250,10 @@ public class VRFragment extends Fragment {
         videoWidgetView.resumeRendering();
         // Update the text to account for the paused video in onPause().
         updateStatusText();
+        gvrAudioEngine.resume();
+        gvrAudioEngineMeditation.resume();
+        mgr.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_NORMAL);
+        mgr.registerListener(this, magnetometer, SensorManager.SENSOR_DELAY_NORMAL);
     }
 
     @Override
@@ -245,5 +299,45 @@ public class VRFragment extends Fragment {
                 videoWidgetView.getDuration() / 1000f +
                 " seconds.";
         statusText.setText(status);
+    }
+    @Override
+    public void onSensorChanged(SensorEvent event) {
+        if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER)
+            mGravity = event.values;
+        if (event.sensor.getType() == Sensor.TYPE_MAGNETIC_FIELD)
+            mGeomagnetic = event.values;
+        if (mGravity != null && mGeomagnetic != null) {
+            float R[] = new float[9];
+            float I[] = new float[9];
+            boolean success = SensorManager.getRotationMatrix(R, I, mGravity, mGeomagnetic);
+            if (success) {
+                float orientation[] = new float[3];
+                SensorManager.getOrientation(R, orientation);
+
+                updatePosition(orientation[0], orientation[2]);
+
+                gvrAudioEngine.setSoundObjectPosition(
+                        soundId,
+                        x, y, z);
+            }
+        }
+    }
+
+    @Override
+    public void onAccuracyChanged(Sensor sensor, int accuracy) {
+
+    }
+
+    private void updatePosition(float azimuth, float elevation) {
+        double azimuth_radian = Math.PI + (azimuth);
+        double elevation_radian = Math.PI + (elevation);
+
+        float r = 10;
+
+        x = (float) (r * Math.sin(elevation_radian) * Math.cos(azimuth_radian));
+        y = (float) (r * Math.sin(elevation_radian) * Math.sin(azimuth_radian));
+        z = (float) (r * Math.cos(elevation_radian));
+
+        Log.v("xyz", String.valueOf(azimuth) + String.valueOf(elevation));
     }
 }
