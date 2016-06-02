@@ -1,27 +1,28 @@
 package com.vrlearning;
 
-
 import android.app.Activity;
+import android.content.res.AssetFileDescriptor;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
+import android.media.MediaPlayer;
+import android.media.MediaPlayer.OnPreparedListener;
 import android.os.Bundle;
 import android.support.v4.app.Fragment;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.SeekBar;
-import android.widget.SeekBar.OnSeekBarChangeListener;
-import android.widget.TextView;
+import android.widget.ImageView;
 import android.widget.Toast;
 
 import com.google.vr.sdk.audio.GvrAudioEngine;
 import com.google.vr.sdk.widgets.video.VrVideoEventListener;
 import com.google.vr.sdk.widgets.video.VrVideoView;
+import com.vrlearning.model.Exercise;
 
-import java.util.Locale;
+import java.io.IOException;
 
 
 /**
@@ -29,9 +30,10 @@ import java.util.Locale;
  * Use the {@link VRFragment#newInstance} factory method to
  * create an instance of this fragment.
  */
-public class VRFragment extends Fragment implements SensorEventListener {
-    private static final String TAG            = "VRFragment";
-    private static final String ARG_VIDEO_NAME = "video_name";
+public class VRFragment extends Fragment implements SensorEventListener, OnPreparedListener {
+    private static final String TAG = "VRFragment";
+
+    private static final String ARG_EXERCISE = "arg_exercise";
 
     /**
      * Preserve the video's state and duration when rotating the phone. This improves
@@ -41,31 +43,22 @@ public class VRFragment extends Fragment implements SensorEventListener {
     private static final String STATE_VIDEO_DURATION = "videoDuration";
     private static final String STATE_PROGRESS_TIME  = "progressTime";
 
-    private String mVideoName;
+    private Exercise mExercise;
 
     /**
      * The video view and its custom UI elements.
      */
     private VrVideoView videoWidgetView;
 
-    /**
-     * Seeking UI & progress indicator. The seekBar's progress value represents milliseconds in the
-     * video.
-     */
-    private SeekBar  seekBar;
-    private TextView statusText;
-
+    private ImageView mPlayButton;
     /**
      * By default, the video will start playing as soon as it is loaded.
      */
     private boolean isPaused = false;
 
     private GvrAudioEngine gvrAudioEngine;
-    private GvrAudioEngine gvrAudioEngineMeditation;
 
-    private static final String SOUND_FILE            = "vr_birds.wav";
-    private volatile     int    soundId               = GvrAudioEngine.INVALID_ID;
-    private static final String SOUND_FILE_MEDITATION = "focus.wav";
+    private volatile int soundId = GvrAudioEngine.INVALID_ID;
 
     private SensorManager mgr;
     private Sensor        accelerometer;
@@ -75,14 +68,18 @@ public class VRFragment extends Fragment implements SensorEventListener {
     float[] mGravity;
     float[] mGeomagnetic;
 
+    private MediaPlayer mPlayer;
+
+    private boolean mStartedForFirstTime = false;
+
     public VRFragment() {
         // Required empty public constructor
     }
 
-    public static VRFragment newInstance(String param1) {
+    public static VRFragment newInstance(Exercise p_exercise) {
         VRFragment fragment = new VRFragment();
         Bundle args = new Bundle();
-        args.putString(ARG_VIDEO_NAME, param1);
+        args.putParcelable(ARG_EXERCISE, p_exercise);
         fragment.setArguments(args);
         return fragment;
     }
@@ -91,58 +88,42 @@ public class VRFragment extends Fragment implements SensorEventListener {
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         if (getArguments() != null) {
-            mVideoName = getArguments().getString(ARG_VIDEO_NAME);
+            mExercise = getArguments().getParcelable(ARG_EXERCISE);
         }
-
-        gvrAudioEngine = new GvrAudioEngine(getActivity(), GvrAudioEngine.RenderingMode.BINAURAL_HIGH_QUALITY);
-        gvrAudioEngineMeditation = new GvrAudioEngine(getActivity(), GvrAudioEngine.RenderingMode.BINAURAL_HIGH_QUALITY);
 
         mgr = (SensorManager) getActivity().getSystemService(Activity.SENSOR_SERVICE);
         accelerometer = mgr.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
         magnetometer = mgr.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
-
+        gvrAudioEngine = new GvrAudioEngine(getActivity(), GvrAudioEngine.RenderingMode.BINAURAL_HIGH_QUALITY);
         gvrAudioEngine.update();
-        gvrAudioEngine.preloadSoundFile(SOUND_FILE);
-        soundId = gvrAudioEngine.createSoundObject(SOUND_FILE);
+        gvrAudioEngine.preloadSoundFile(mExercise.bckgAudioName());
+        soundId = gvrAudioEngine.createSoundObject(mExercise.bckgAudioName());
         gvrAudioEngine.setHeadPosition(500 * x, 500 * y, 500 * z);
         gvrAudioEngine.setSoundObjectPosition(soundId, 0, 0, 0);
-        gvrAudioEngine.setSoundVolume(soundId, 20);
-        gvrAudioEngine.playSound(soundId, true);
-
-        gvrAudioEngineMeditation.update();
-        gvrAudioEngineMeditation.preloadSoundFile(SOUND_FILE_MEDITATION);
-        int soundMeditationId = gvrAudioEngineMeditation.createSoundObject(SOUND_FILE_MEDITATION);
-        gvrAudioEngineMeditation.setHeadPosition(500 * x, 500 * y, 500 * z);
-        gvrAudioEngineMeditation.setSoundObjectPosition(
-                soundMeditationId, 0, 0, 0);
-        gvrAudioEngineMeditation.setSoundVolume(soundMeditationId, 1);
-        gvrAudioEngineMeditation.playSound(soundMeditationId, true);
+        gvrAudioEngine.setSoundVolume(soundId, mExercise.bckgAudioVolume());
     }
 
     @Override
-    public View onCreateView(LayoutInflater inflater, ViewGroup container,
-                             Bundle savedInstanceState) {
+    public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.fragment_vr, container, false);
-        seekBar = (SeekBar) view.findViewById(R.id.seek_bar);
-        statusText = (TextView) view.findViewById(R.id.status_text);
+        mPlayButton = (ImageView) view.findViewById(R.id.play_btn);
         videoWidgetView = (VrVideoView) view.findViewById(R.id.video_view);
 
         // Add the restore state code here.
         if (savedInstanceState != null) {
             long progressTime = savedInstanceState.getLong(STATE_PROGRESS_TIME);
             videoWidgetView.seekTo(progressTime);
-            seekBar.setMax((int) savedInstanceState.getLong(STATE_VIDEO_DURATION));
-            seekBar.setProgress((int) progressTime);
 
             isPaused = savedInstanceState.getBoolean(STATE_IS_PAUSED);
+            mPlayButton.setVisibility(isPaused ? View.VISIBLE : View.INVISIBLE);
             if (isPaused) {
                 videoWidgetView.pauseVideo();
+                pause();
             }
         } else {
-            seekBar.setEnabled(false);
             try {
                 if (videoWidgetView.getDuration() <= 0) {
-                    videoWidgetView.loadVideoFromAsset(mVideoName);
+                    videoWidgetView.loadVideoFromAsset(mExercise.videoName());
                 }
             } catch (Exception e) {
                 Toast.makeText(getActivity(), "Error opening video: " + e.getMessage(), Toast.LENGTH_LONG)
@@ -151,31 +132,9 @@ public class VRFragment extends Fragment implements SensorEventListener {
             isPaused = true;
             if (videoWidgetView != null) {
                 videoWidgetView.pauseVideo();
+                pause();
             }
         }
-
-        // Add the seekbar listener here.
-        seekBar.setOnSeekBarChangeListener(new OnSeekBarChangeListener() {
-
-            @Override
-            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                // if the user changed the position, seek to the new position.
-                if (fromUser) {
-                    videoWidgetView.seekTo(progress);
-                    updateStatusText();
-                }
-            }
-
-            @Override
-            public void onStartTrackingTouch(SeekBar seekBar) {
-                // ignore for now.
-            }
-
-            @Override
-            public void onStopTrackingTouch(SeekBar seekBar) {
-                // ignore for now.
-            }
-        });
 
         // Add the VrVideoView listener here
         videoWidgetView.setEventListener(new VrVideoEventListener() {
@@ -184,10 +143,7 @@ public class VRFragment extends Fragment implements SensorEventListener {
              */
             @Override
             public void onLoadSuccess() {
-                Log.i(TAG, "Successfully loaded video " + videoWidgetView.getDuration());
-                seekBar.setMax((int) videoWidgetView.getDuration());
-                seekBar.setEnabled(true);
-                updateStatusText();
+                mPlayButton.setVisibility(View.VISIBLE);
             }
 
             /**
@@ -203,18 +159,22 @@ public class VRFragment extends Fragment implements SensorEventListener {
             public void onClick() {
                 if (isPaused) {
                     videoWidgetView.playVideo();
+                    if (mStartedForFirstTime) {
+                        resume();
+                    } else {
+                        mStartedForFirstTime = true;
+                        start();
+                    }
                 } else {
                     videoWidgetView.pauseVideo();
+                    pause();
                 }
-
                 isPaused = !isPaused;
-                updateStatusText();
+                mPlayButton.setVisibility(isPaused ? View.VISIBLE : View.INVISIBLE);
             }
 
             @Override
             public void onNewFrame() {
-                updateStatusText();
-                seekBar.setProgress((int) videoWidgetView.getCurrentPosition());
             }
 
             /**
@@ -231,9 +191,18 @@ public class VRFragment extends Fragment implements SensorEventListener {
     }
 
     @Override
+    public void onResume() {
+        super.onResume();
+        // Resume the 3D rendering.
+        videoWidgetView.resumeRendering();
+        if (mStartedForFirstTime) resume();
+        mgr.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_NORMAL);
+        mgr.registerListener(this, magnetometer, SensorManager.SENSOR_DELAY_NORMAL);
+    }
+
+    @Override
     public void onPause() {
-        gvrAudioEngine.pause();
-        gvrAudioEngineMeditation.pause();
+        pause();
         super.onPause();
         // Prevent the view from rendering continuously when in the background.
         videoWidgetView.pauseRendering();
@@ -244,22 +213,10 @@ public class VRFragment extends Fragment implements SensorEventListener {
     }
 
     @Override
-    public void onResume() {
-        super.onResume();
-        // Resume the 3D rendering.
-        videoWidgetView.resumeRendering();
-        // Update the text to account for the paused video in onPause().
-        updateStatusText();
-        gvrAudioEngine.resume();
-        gvrAudioEngineMeditation.resume();
-        mgr.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_NORMAL);
-        mgr.registerListener(this, magnetometer, SensorManager.SENSOR_DELAY_NORMAL);
-    }
-
-    @Override
     public void onDestroy() {
         // Destroy the widget and free memory.
         videoWidgetView.shutdown();
+        mPlayer.release();
         super.onDestroy();
     }
 
@@ -271,35 +228,6 @@ public class VRFragment extends Fragment implements SensorEventListener {
         super.onSaveInstanceState(savedInstanceState);
     }
 
-//    @Override
-//    public void setUserVisibleHint(boolean isVisibleToUser) {
-//        super.setUserVisibleHint(isVisibleToUser);
-//
-//        if (isVisibleToUser) {
-//            try {
-//                if (videoWidgetView.getDuration() <= 0) {
-//                    videoWidgetView.loadVideoFromAsset("video_1.mp4");
-//                }
-//            } catch (Exception e) {
-//                Toast.makeText(getActivity(), "Error opening video: " + e.getMessage(), Toast.LENGTH_LONG)
-//                        .show();
-//            }
-//        } else {
-//            isPaused = true;
-//            if (videoWidgetView != null) {
-//                videoWidgetView.pauseVideo();
-//            }
-//        }
-//    }
-
-    private void updateStatusText() {
-        String status = (isPaused ? "Paused: " : "Playing: ") +
-                String.format(Locale.getDefault(), "%.2f", videoWidgetView.getCurrentPosition() / 1000f) +
-                " / " +
-                videoWidgetView.getDuration() / 1000f +
-                " seconds.";
-        statusText.setText(status);
-    }
     @Override
     public void onSensorChanged(SensorEvent event) {
         if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER)
@@ -316,16 +244,44 @@ public class VRFragment extends Fragment implements SensorEventListener {
 
                 updatePosition(orientation[0], orientation[2]);
 
-                gvrAudioEngine.setSoundObjectPosition(
-                        soundId,
-                        x, y, z);
+//                if (gvrAudioEngine.isSoundPlaying(soundId))
+                gvrAudioEngine.setSoundObjectPosition(soundId, x, y, z);
             }
         }
     }
 
     @Override
     public void onAccuracyChanged(Sensor sensor, int accuracy) {
+        // do nothing
+    }
 
+    @Override
+    public void onPrepared(MediaPlayer mp) {
+        mPlayer.start();
+        gvrAudioEngine.playSound(soundId, true);
+    }
+
+    private void start() {
+        AssetFileDescriptor afd = null;
+        try {
+            afd = getActivity().getAssets().openFd(mExercise.audioName());
+            mPlayer = new MediaPlayer();
+            mPlayer.setDataSource(afd.getFileDescriptor(), afd.getStartOffset(), afd.getLength());
+            mPlayer.setOnPreparedListener(this);
+            mPlayer.prepareAsync();
+        } catch (IOException p_e) {
+            p_e.printStackTrace();
+        }
+    }
+
+    private void resume() {
+        if (mPlayer != null && !mPlayer.isPlaying()) mPlayer.start();
+        if (gvrAudioEngine != null && !gvrAudioEngine.isSoundPlaying(soundId)) gvrAudioEngine.resume();
+    }
+
+    private void pause() {
+        if (mPlayer != null && mPlayer.isPlaying()) mPlayer.pause();
+        if (gvrAudioEngine != null && gvrAudioEngine.isSoundPlaying(soundId)) gvrAudioEngine.pause();
     }
 
     private void updatePosition(float azimuth, float elevation) {
@@ -340,4 +296,5 @@ public class VRFragment extends Fragment implements SensorEventListener {
 
         Log.v("xyz", String.valueOf(azimuth) + String.valueOf(elevation));
     }
+
 }
