@@ -101,6 +101,10 @@ public class VRFragment extends Fragment {
                 Toast.makeText(getActivity(), "Error opening video: " + e.getMessage(), Toast.LENGTH_LONG)
                         .show();
             }
+            isPaused = true;
+            if (videoWidgetView != null) {
+                videoWidgetView.pauseVideo();
+            }
         }
 
         // Add the seekbar listener here.
@@ -220,7 +224,7 @@ public class VRFragment extends Fragment {
 //        if (isVisibleToUser) {
 //            try {
 //                if (videoWidgetView.getDuration() <= 0) {
-//                    videoWidgetView.loadVideoFromAsset("video_4.mp4");
+//                    videoWidgetView.loadVideoFromAsset("video_1.mp4");
 //                }
 //            } catch (Exception e) {
 //                Toast.makeText(getActivity(), "Error opening video: " + e.getMessage(), Toast.LENGTH_LONG)

@@ -20,7 +20,7 @@ public class MainActivity extends AppCompatActivity {
             public Fragment getItem(int position) {
                 switch (position) {
                     case 0:
-                        return VRFragment.newInstance("video_4.mp4");
+                        return VRFragment.newInstance("video_1.mp4");
                 }
                 return null;
             }
