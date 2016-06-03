@@ -21,9 +21,9 @@ public class ExerciseFactory {
     public static Exercise bavarianAlpsInnerPeace() {
         return Exercise.builder()
                 .exerciseTitle("Bavarian Alps Inner peace")
-                .videoName("video_sunset.mp4")
+                .videoName("video_alpe.mp4")
                 .audioName("inner_peace.mp3")
-                .bckgAudioName("yodel.wav")
+                .bckgAudioName("wind.wav")
                 .bckgAudioVolume(5)
                 .imgResId(R.drawable.ic_bavarian_alps_inner_peace)
                 .build();
