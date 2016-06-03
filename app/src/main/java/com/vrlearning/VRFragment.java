@@ -216,7 +216,7 @@ public class VRFragment extends Fragment implements SensorEventListener, OnPrepa
     public void onDestroy() {
         // Destroy the widget and free memory.
         videoWidgetView.shutdown();
-        mPlayer.release();
+        if (mPlayer != null) mPlayer.release();
         super.onDestroy();
     }
 
