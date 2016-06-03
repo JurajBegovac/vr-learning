@@ -32,10 +32,10 @@ public class ExerciseFactory {
     public static Exercise dreamBeachConfidence() {
         return Exercise.builder()
                 .exerciseTitle("Dream Beach Confidence")
-                .videoName("video_sunset.mp4")
+                .videoName("video_more.mp4")
                 .audioName("confidence.mp3")
                 .bckgAudioName("waves.wav")
-                .bckgAudioVolume(5)
+                .bckgAudioVolume(2)
                 .imgResId(R.drawable.ic_dream_beach_confidence)
                 .build();
     }

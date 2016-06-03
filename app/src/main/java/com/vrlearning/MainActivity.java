@@ -21,7 +21,7 @@ public class MainActivity extends AppCompatActivity {
             public Fragment getItem(int position) {
                 switch (position) {
                     case 0:
-                        return VRFragment.newInstance(ExerciseFactory.sunsetFocus());
+                        return VRFragment.newInstance(ExerciseFactory.dreamBeachConfidence());
                 }
                 return null;
             }
